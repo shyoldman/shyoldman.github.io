@@ -1,37 +1,130 @@
-## Welcome to GitHub Pages
+## 事务
+### 事务的四大特性ACID
+事务是逻辑上的一组操作，要么都执行，要么都不执行。
++ 原子性： 事务是最小的执行单位，不允许分割。事务的原子性确保动作要么全部完成，要么完全不起作用；
++ 一致性： 执行事务前后，数据保持一致，多个事务对同一个数据读取的结果是相同的；
++ 隔离性： 并发访问数据库时，一个用户的事务不被其他事务所干扰，各并发事务之间数据库是独立的；
++ 持久性： 一个事务被提交之后。它对数据库中数据的改变是持久的，即使数据库发生故障也不应该对其有任何影响。
+### 并发事务会造成的问题
++ 脏读（Dirty read）: 当一个事务正在访问数据并且对数据进行了修改，而这种修改还没有提交到数据库中，这时另外一个事务也访问了这个数据，然后使用了这个数据。因为这个数据是还没有提交的数据，那么另外一个事务读到的这个数据是“脏数据”，依据“脏数据”所做的操作可能是不正确的。
++ 丢失修改（Lost to modify）: 指在一个事务读取一个数据时，另外一个事务也访问了该数据，那么在第一个事务中修改了这个数据后，第二个事务也修改了这个数据。这样第一个事务内的修改结果就被丢失，因此称为丢失修改。 例如：事务1读取某表中的数据A=20，事务2也读取A=20，事务1修改A=A-1，事务2也修改A=A-1，最终结果A=19，事务1的修改被丢失。
++ 不可重复读（Unrepeatableread）: 指在一个事务内多次读同一数据。在这个事务还没有结束时，另一个事务也访问该数据。那么，在第一个事务中的两次读数据之间，由于第二个事务的修改导致第一个事务两次读取的数据可能不太一样。这就发生了在一个事务内两次读到的数据是不一样的情况，因此称为不可重复读。
 
-You can use the [editor on GitHub](https://github.com/shyoldman/shyoldman.github.io/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+## MySQL的并发控制
+### 读写锁
+在处理并发读或者写的时候，可以通过实现一个由两种类型的锁组成的锁系统来解决问题。这两种类型的锁通常称为共享锁和排他锁，也叫读锁和写锁
++ 读锁是共享的，或者说是相互不阻塞的。多个客户可以同时读取同一个资源，而互不干扰
++ 死锁是排他的。也就是说一个死锁会阻塞其他的写锁和读锁，保证在给定的时间里，只有一个用户能执行写入，并防止其他用户读取正在写入的统一资源。
+### 锁粒度
+一种提高共享资源并发性的方式就是让锁定对象更有选择性。尽量只锁定需要修改的部分数据，而不是所有的资源。任何时候，在给定的资源上，锁定的数据量越少，则系统的并发程度越高。
+问题是加锁也需要消耗资源。锁的各种操作，包括获得锁、检查锁是否解除、释放锁等，都会增加系统的开销。
+所谓的锁策略，就是在锁的开销和数据的安全性之间寻求平衡，这种平衡当然也会影响到性能。
+两种重要的锁策略：
++ 表锁：MySQL中最基本的锁策略，并且是开销最小的策略。它会锁定整张表，一个用户在对表进行写操作前，需要先获取写锁，这会阻塞其他用户对该表的所有读写操作。只有没有写锁的时候，其他读取的用户才能获得读锁，读锁之间是不相互阻塞的。
++ 行级锁：行级锁可以最大程度地支持并发处理（同时也带来了最大的锁开销）。
+## 索引
+MySQL官方对于索引的定义：索引是帮助MySQL高效获取数据的数据结构
+索引类型：
++ 普通索引：加速查询
++ 唯一索引：加速查询 + 列值唯一（可以有null）
++ 主键索引：加速查询 + 列值唯一（不可以有null） + 表中只有一个
++ 组合索引：多列值组成一个索引，专门用于组合搜索，其效率>索引合并
++ 全文索引：对文本的内容分词，进行搜索
+在文件系统及数据库系统中，多采用B+Tree作为索引结构。一般来说，索引本身也很大，不可能全部存储在内存中，因此索引往往以索引文件的形式存储的磁盘上。这样的话，索引查找过程中就要产生磁盘I/O消耗，相对于内存存取，I/O存取的消耗要高几个数量级，所以评价一个数据结构作为索引的优劣最重要的指标就是在查找过程中磁盘I/O操作次数的渐进复杂度。换句话说，索引的结构组织要尽量减少查找过程中磁盘I/O的存取次数。
+为何使用B+Tree而不是红黑树？
+1. 更少的查询次数
+平衡树的查找操作的时间复杂度和树的高度h相关，O(h)=O(logdN)，其中d为每个节点的出度。红黑树的出度为2，而B+Tree的出度一般都非常大，所以红黑树的树高h很明显比B+Tree大很多，查找的次数也就更多
+2. 利用磁盘预读特性
+为了减少磁盘I/O操作，磁盘往往不是严格按需读取，而是每次都会预读。预读过程中，磁盘进行顺序读取，顺序读取不需要进行磁盘寻道，并且只需要很短的磁盘旋转时间，速度会特别快。操作系统一般将内存和磁盘分割成固定大小的块，每一块称为一页，内存与磁盘以页为单位交换数据。数据库系统将索引的一个节点的大小设置为页的大小，使得一次IO就能完全载入一个节点，并且利用预读特性，相邻的结点也能够被预先载入。
+## MySQL的索引实现
+### InnoDB索引实现
+InnoDB同样使用B+Tree作为索引结构，但是具体方式与MyISAM截然不同，区别在于：
+1. InnoDB的数据文件本身就是索引文件。MyISAM索引文件和数据文件是分离的，索引文件仅仅保存数据记录的地方。而在InnoDB中，表数据文件本身就是按照B+Tree组织的一个索引结构，这棵树的叶节点data域保存了完整的数据记录。这个索引的key是数据表的主键，因此InnoDB表数据文件本身就是主索引
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+## 主从复制
+### 什么是MySQL的主从复制
+主从复制是指一台服务器充当主数据库服务器，另一台或多台服务器充当从数据库服务器，主服务器中的数据自动复制到从服务器之中。对于多级复制，数据库服务器即可充当主机，也可充当从机。MySQL主从复制的基础是主服务器对数据库修改记录二进制日志，从服务器通过主服务器的二进制日志自动执行更新。
+### 主从复制的类型
++ 基于语句的复制：主服务器上面执行的语句在从服务器上面再执行一遍；存在的问题：时间上可能不完全同步造成偏差，执行语句的用户也可能是不同一个用户。
++ 基于行的复制：把主服务器上面改编后的内容直接复制过去，而不关心到底改变该内容是由哪条语句引发的；存在的问题：比如一个工资表中有一万个用户，我们把每个用户的工资+1000，那么基于行的复制则要复制一万行的内容，由此造成的开销比较大，而基于语句的复制仅仅一条语句就可以了。
++ 混合类型的复制：MySQL默认使用基于语句的复制，当基于语句的复制会引发问题的时候就会使用基于行的复制，MySQL会自动进行选择；在MySQL主从复制架构中，读操作可以在所有的服务器上面进行，而写操作只能在主服务器上面进行。主从复制架构虽然给读操作提供了扩展，可如果写操作也比较多的话（多台从服务器还要从主服务器上面同步数据），单主模型的复制中主服务器势必会成为性能瓶颈。
+### 工作原理
+主从复制主要涉及三个线程：binlog线程，IO线程，SQL线程
++ binlog 线程 ：负责将主服务器上的数据更改写入二进制日志（Binary log）中。
++ I/O 线程 ：负责从主服务器上读取二进制日志，并写入从服务器的中继日志（Relay log）。
++ SQL 线程 ：负责读取中继日志，解析出主服务器已经执行的数据更改并在从服务器中重放（Replay）。
+## 读写分离
+### 什么是读写分离
+让主数据库处理事务性增、改、删操作（INSERT、UPDATE、DELETE），而从数据库处理SELECT查询操作。数据库复制被用来把事务性操作导致的变更同步到集群中的从数据库。
 
-### Markdown
-
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
-
-```markdown
-Syntax highlighted code block
-
-# Header 1
-## Header 2
-### Header 3
-
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
+# InnoDB深入学习
+InnoDB有四种行格式：Compact、Redundant、Dynamic和Compressed
+行格式是在创建或者修改表的时候指定的
+```SQL
+CREATE TABLE 表名 (列的信息) ROW_FORMAT=行格式名称
+ALTER TABLE 表名 ROW_FORMAT=行格式名称
 ```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/shyoldman/shyoldman.github.io/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+![](https://mmbiz.qpic.cn/mmbiz_png/RLmbWWew55FVTOrSL5huibzeawNtia5ey37MIoP0YPpYdY7Y0TO0iaZ3a79QB7GiaHyTqJTicNBQ6Nk202h4JECicib3A/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1) 
+从图中可以看出来，一条完整的记录其实可以被分为**记录的额外信息**和**记录的真实数据**两大部分
+### 记录的额外信息
+#### 变长字段长度列表
+如VARCHAR(M)、VARBINARY(M)、各种TEXT类型，各种BLOB类型，这些变长的数据类型占用的存储空间分为两部分：
++ 真正的数据内容
++ 占用的字节数
+因为如果不保存真实数据占用的字节数的话，MySQL也不知道我们的数据到底有多长。在Compact行格式中，**把所有变长类型的列的长度都存放在记录的开头部位形成一个列表，按照列的顺序逆序存放**
+#### NULL值列表 
+表中的某些列可能会存储NULL值，如果把这些NULL值都放在记录的真实数据中存储会很占地方，所以Compact行格式把这些值为NULL的列统一管理起来，存储到NULL值列表中。
+1. 首先统计表中允许存储NULL值的列有哪些
+2. 如果表中没有允许存储NULL的列，则NULL值列表也不存在了。否则将每个允许存储NULL的列对应一个二进制位，二进制位按照列的顺序逆序排列，二进制位表示的意义如下：
+    + 二进制位的值为1时，代表该列的值为NULL。
+    + 二进制位的值为0时，代表该列的值为NULL。
+3. MySQL规定NULL值列表必须用整数个字节的位表示，如果使用的二进制位个数不是整数个字节，则在字节的高位补0。
+#### 记录头信息
+由固定的5个字节组成，5个字节就是40个bit，不同的位代表不同的信息
+![](https://mmbiz.qpic.cn/mmbiz_png/RLmbWWew55FVTOrSL5huibzeawNtia5ey3seeEXfe32gnNpyFDpGADNaia0ytgBf2l35mLFECb1jI4HJmEoFJAOmA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+|名称|大小(bit)|描述|
+|---|---|--|
+|预留位1|1|没有使用|
+|预留位2|1|没有使用|
+|delete_mask|1|标记该记录是否被删除|
+|min_rec_mask|1|标记该记录是否为B+树的非叶子节点中的最小记录|
+|n_owned|4|表示当前槽管理的记录数|
+|heap_no|13|表示当前记录在记录堆的位置信息|
+|record type|3|	表示当前记录的类型，0表示普通记录，1表示B+树非叶节点记录，2表示最小记录，3表示最大记录|
+|next_record|16|表示下一条记录的相对位置|
+## 记录的真实数据
+记录的真实数据除了我们插入的那些列的数据，MySQL会为每个记录默认的添加一些列（也称为隐藏列）：
+|列名|是否必须|占用空间|描述|
+|--|--|--|--|
+|row_id|否|6byte|行id，唯一标识一条记录|
+|transaction_id|是|6byte|事务id|
+|roll_pointer|是|7byte|回滚指针|
+需要注意的是，MySQL服务器会为每条记录都添加 transaction_id 和 roll_pointer 这两个列，但是 row_id 只有在表没有定义主键的时候才会为记录添加，相当于MySQL服务器帮我们来添加一个主键。
+# InnoDB数据页结构
+页是MySQL管理存储空间的基本单位，一个页的大小一般是16KB，并且我们知道了记录其实是被存放在页中的，如果记录占用的空间太大还可能造成行溢出现象，这会导致一条记录被分散存储在多个页中。
+## 数据页结构
+页的本质就是一块16KB大小的存储空间，InnoDB为了不同目的而把页分为不同的类型，其中用于存放记录的页也称为数据页
+![](https://mmbiz.qpic.cn/mmbiz_png/RLmbWWew55FusCptW3JwBoBchTsR6PJ5YoHfS02chsR4bSERrblH0ousvlric9BV3QcGrCClQ7qibWVWWhx5hQaA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+从图中可以看出，一个InnoDB分为七个部分，每个部分又可以划分为若干小部分
+|名称|中文名|占用空间大小|简单描述|
+|----|------|------------|--------|
+|File Header|文件头|38byte|一些描述页的信息|
+|Page Header|页头|56byte|页的状态信息|
+|Infimum+supremum|最小记录+最大记录|26byte|两个虚拟的行记录|
+|User Records|用户记录|不确定|实际存储的行记录内容|
+|Free Space|空闲空间|不确定|页中尚未使用的空间|
+|Page Directory|页目录|不确定|页中的记录相对位置|
+|File Tailer|文件结尾|8byte|校验页是否完整|
+## 记录在页中的存储
+在页的7个组成部分中，我们自己存储的记录会按照我们指定的行格式存储到User Records部分。但是在一开始生成页的时候，其实并没有User Records这个部分，每当我们插入一条记录，都会从Free Space部分，也就是尚未使用的存储空间中申请一个记录大小的空间划分到User Records部分，当Free Space部分的空间全部被User Records部分替代掉之后，也就意味着这个页使用完了，如果还有新的记录插入的话，就需要去申请新的页了
+![](https://mmbiz.qpic.cn/mmbiz_png/RLmbWWew55FusCptW3JwBoBchTsR6PJ5xibbpE0yjbGYUwszT98icQbzOJibia0aufvOZV4FR6xfJ1HF0jBnmr8fGA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+先建一个测试表
+```SQL
+CREATE TABLE page_demo(
+c1 INT,
+c2 INT,
+c3 VARCHAR(10000),
+PRIMARY KEY (c1)
+) CHARSET=ascii ROW_FORMAT=Compact;
+```
+这个测试表page_demo有三列，其中c1和c2存储整数，c3用来存储字符串。需要注意的是
