@@ -61,9 +61,11 @@ ALTER TABLE 表名 ROW_FORMAT=行格式名称
     + 二进制位的值为1时，代表该列的值为NULL。
     + 二进制位的值为0时，代表该列的值为NULL。
 3. MySQL规定NULL值列表必须用整数个字节的位表示，如果使用的二进制位个数不是整数个字节，则在字节的高位补0。
+
 #### 记录头信息
 由固定的5个字节组成，5个字节就是40个bit，不同的位代表不同的信息
 ![](https://mmbiz.qpic.cn/mmbiz_png/RLmbWWew55FVTOrSL5huibzeawNtia5ey3seeEXfe32gnNpyFDpGADNaia0ytgBf2l35mLFECb1jI4HJmEoFJAOmA/640?wx_fmt=png&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+
 |名称|大小(bit)|描述|
 |---|---|--|
 |预留位1|1|没有使用|
@@ -74,6 +76,7 @@ ALTER TABLE 表名 ROW_FORMAT=行格式名称
 |heap_no|13|表示当前记录在记录堆的位置信息|
 |record type|3|	表示当前记录的类型，0表示普通记录，1表示B+树非叶节点记录，2表示最小记录，3表示最大记录|
 |next_record|16|表示下一条记录的相对位置|
+
 ## 记录的真实数据
 记录的真实数据除了我们插入的那些列的数据，MySQL会为每个记录默认的添加一些列（也称为隐藏列）：
 |列名|是否必须|占用空间|描述|
